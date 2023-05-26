@@ -7,7 +7,6 @@ const { password } = require('./db.config');
 const app = express();
 
 
-
 //Login
 async function login(email,password) {
     try {
@@ -243,6 +242,21 @@ async function getPosition(){
         console.log(error);
     }
 }
+
+
+async function adaycvurlguncelle(cvUrl,adayId){
+    try{
+        let pool=await sql.connect(config);
+        const updateQuery = `UPDATE Adaylar SET cv_url = '${cvUrl}' WHERE id = '${adayId}'`;
+        await pool.request().query(updateQuery);
+    }
+
+    catch(error){
+        console.log(error);
+    }
+}
+
+
 //adayları getir
 async function getAdaylar(){
     try{
@@ -297,8 +311,8 @@ async function insertAday(ad,soyad,gsm,email,yas,dogum_tarihi,yasadigi_sehir,dog
 async function getIsletmeler(){
     try{
         let pool=await sql.connect(config);
-        let tümdata=await pool.request().query("Select * from İsletmeler");
-        const data={data:tümdata.recordset}
+        let alldata=await pool.request().query("Select * from İsletmeler");
+        const data={data:alldata.recordset}
         return data;
     }
     
@@ -309,11 +323,11 @@ async function getIsletmeler(){
 async function insertNot(id,degerlendirme){
     try{
         let pool=await sql.connect(config);
-        let tümdata=await pool.request()
+        let alldata=await pool.request()
         .input('id', sql.Int, id)
         .input('degerlendirme', sql.NVarChar, degerlendirme)
         .query("UPDATE Görüsmeler SET degerlendirme = @degerlendirme WHERE id = @id;");
-        const data={data:tümdata.recordset}
+        const data={data:alldata.recordset}
         return data;
     }
     catch(error){
@@ -326,8 +340,8 @@ async function insertNot(id,degerlendirme){
 async function getGorusmeler(){
     try{
         let pool=await sql.connect(config);
-        let tümdata=await pool.request().query("Select id, (select adsoyad from Yetkililer where id=yetkili_id) yetkili_ID ,(select unvan from Pozisyonlar where id=pozisyon_id) pozisyon_ID,(select CONCAT (ad,'', soyad) from Adaylar where id=aday_id) aday_ID,  (select İsletmeler.unvan from Pozisyonlar INNER JOIN İsletmeler ON Pozisyonlar.isletmeId=İsletmeler.id where Pozisyonlar.id = Görüsmeler.pozisyon_id)isletmeID ,saat,tarih,degerlendirme from Görüsmeler");
-        const data={data:tümdata.recordset}
+        let alldata=await pool.request().query("Select id, (select adsoyad from Yetkililer where id=yetkili_id) yetkili_ID ,(select unvan from Pozisyonlar where id=pozisyon_id) pozisyon_ID,(select CONCAT (ad,'', soyad) from Adaylar where id=aday_id) aday_ID,  (select İsletmeler.unvan from Pozisyonlar INNER JOIN İsletmeler ON Pozisyonlar.isletmeId=İsletmeler.id where Pozisyonlar.id = Görüsmeler.pozisyon_id)isletmeID ,saat,tarih,degerlendirme from Görüsmeler");
+        const data={data:alldata.recordset}
         return data;
     }
     
@@ -339,8 +353,8 @@ async function getGorusmeler(){
 async function getUsers(){
     try{
         let pool=await sql.connect(config);
-        let tümPosition=await pool.request().query("Select * from Kullanıcılar");
-        const data={data:tümPosition.recordset}
+        let allPosition=await pool.request().query("Select * from Kullanıcılar");
+        const data={data:allPosition.recordset}
         return data;
     }
 
@@ -354,8 +368,8 @@ async function getUsers(){
 async function getYetkililer(){
     try{
         let pool=await sql.connect(config);
-        let tümYetkili=await pool.request().query("Select * from Yetkililer");
-        const data={data:tümYetkili.recordset}
+        let allYetkili=await pool.request().query("Select * from Yetkililer");
+        const data={data:allYetkili.recordset}
         return data;
     }
     catch(error){
@@ -378,6 +392,7 @@ function generateToken() {
 }
 
 
+  
 
 module.exports={
     
@@ -402,5 +417,7 @@ module.exports={
     deleteAday:deleteAday,
     updateUserActivity:updateUserActivity,
     insertPosition:insertPosition,
+    adaycvurlguncelle:adaycvurlguncelle
+
 
 }

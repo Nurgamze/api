@@ -6,21 +6,32 @@ var bodyParser=require ("body-parser");
 var cors=require ("cors");
 const { response } = require("express");
 const { request } = require("http");
+const http = require('http');
 const path = require('path');
 const multer = require('multer');
 var fileupload=require('express-fileupload');
-
+const fs = require('fs');
 var app =express();
-var router=express.Router();
+const folderPath = './';
+const folderPathcvler = './cvfiles';
 
+var router=express.Router();
 
 app.use(bodyParser.urlencoded({extended :true}));
 app.use(bodyParser.json());
 app.use(cors());
-app.use("/api", router); 
+app.use("/", router);
 
 app.use(fileupload());
+app.use(express.static(folderPath));
+app.use(express.static(folderPathcvler));
 
+
+
+
+app.get('/', function(req, res) {
+  res.sendFile(path.join(__dirname + '/index.html'));
+});
 
 router.use((request,response,next)=>{
     console.log("middleware");
@@ -29,63 +40,125 @@ router.use((request,response,next)=>{
 })
 
 
+/* belli bir dizini direk erişime açıyoruz*/
+
+app.get('/files', (req, res) => {
+    fs.readdir(folderPathcvler, (err, files) => {
+      if (err) {
+        console.error(err);
+        res.status(500).send('Internal server error');
+      } else {
+        const fileList = files.map(file => ({
+          name: file,
+          url: `/cvfiles/${file}`, // Sanal dizin ekleyin //url gönderirken bu tip gönder 
+        }));
+        res.json(fileList);
+      }
+    });
+  });
+
+
+/* belli bir dizini direk erişime açıyoruz*/
+
 // Multer disk storage tanımlanıyor.
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         // Dosya yüklemesi yapılacak klasör belirleniyor.
-        const destinationPath = path.join(__dirname, '../cvler');
+        const destinationPath = path.join(__dirname, './cvfiles');
         cb(null, destinationPath);
     },
     filename: function (req, file, cb) {
-        // Yükleme yapılan her dosyaya benzersiz bir isim veriliyor.
-        var uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-        cb(null, file.fieldname + '-' + uniqueSuffix + '.pdf')
+        
+        cb(null, file.originalname)
     }
 });
+
 
 // Multer middleware'i tanımlanıyor.
 const upload = multer({
     storage: storage,
     // Sadece PDF dosyalarının yüklenmesine izin veriliyor.
     fileFilter: function (req, file, cb) {
-        if (file.mimetype !== 'application/pdf') {
-            return cb(new Error('Only PDF files are allowed'))
-        }
-        cb(null, true)
+      if (file.mimetype !== 'application/pdf') {
+        return cb(new Error('Yalnizca pdf tipi dosyalar'))
+      }
+      cb(null, true)
     }
-});
+  });
 
 // Dosya yükleme endpoint'i tanımlanıyor.
 router.post('/upload',upload.single('pdf'),(request,response)=>{
+    const adayId = request.body.adayId;
+    console.log('Aday ID:', adayId);
     console.log(request.file);
     if (!request.file) {
         return response.status(400).json({ message: 'Dosya yüklenemedi.' });
     }
-    response.status(200).json({ file: request.file.filename });
+
+    const cvUrl = `http://192.168.20.159:1000/cvfiles/${request.file.filename}`;
+    dboperations.adaycvurlguncelle(cvUrl,adayId);
+
+    response.status(200).json({  "adayId": adayId, "fileName": request.file.filename });
 });
 
 
-/*
-const upload = multer({
-    dest: 'C:/Users/gamzenur.demir/Desktop/cvler',
-    fileFilter: (request, file, cb) => {
-      if (
-        file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-        file.mimetype === 'application/pdf' ||
-        file.mimetype === 'application/vnd.ms-excel'
-      ) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type.'));
+
+
+
+//CVLER getirme
+router.get('/cvler/:id', (req, res) => {
+    const cvDirPath = path.join(__dirname, './cvfiles');
+    const requiredId = req.params.id;
+  
+    fs.readdir(cvDirPath, (err, files) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'CV bilgileri alınırken bir hata oluştu.' });
       }
-    },
+  
+      const cvInfoList = files
+        .filter(fileName => fileName.startsWith(requiredId))
+        .map(fileName => {
+          const adayId = fileName.split('-')[0].replace(/_/g, ' ');
+          const pdfLink = decodeURIComponent(fileName.split('-').slice(1).join('-'));
+          return { adayId, pdfLink };
+        })
+        .find(cvInfo => cvInfo.adayId === requiredId);
+  
+      if (!cvInfoList) {
+        return res.status(404).json({ error: 'Belirtilen ID ile eşleşen CV bulunamadı.' });
+      }
+  
+      res.json(cvInfoList);
+    });
+  });
+
+router.route('/cvler/:id').post((request, response) => {
+    const cvDirPath = path.join(__dirname, './cvfiles');
+    const adayId = request.params.id;
+    const modifiedFileName = `${adayId}-${request.body.ad}_${request.body.soyad}-CV.pdf`;
+    const filePath = path.join(cvDirPath, modifiedFileName);
+  
+    const pdfFile = request.files.pdf;
+  
+    if (fs.existsSync(filePath)) {
+      // Mevcut dosyayı güncelle
+      fs.renameSync(pdfFile.tempFilePath, filePath);
+    } else {
+      // Dosya yoksa yeni dosya oluştur
+      pdfFile.mv(filePath, (err) => {
+        if (err) {
+          console.error(err);
+          response.status(500).json({ error: 'Dosya kaydedilirken bir hata oluştu.' });
+          return;
+        }
+  
+        response.json({ message: 'Dosya başarıyla güncellendi.' });
+      });
+    }
   });
   
-  router.post('/upload', upload.single('file'), (request, response) => {
-    response.status(200).send('Dosya başarıyla yüklendi');
-  });
-*/
-
+ 
 
 //giriş yap 
 router.route('/login').post((request,response)=>{
@@ -276,16 +349,6 @@ router.route('/deleteaday/:id').delete((request,response)=>{
     })
 })
 
-
-// //yetkili silme
-// router.route('/edit/:id').post((request,response)=>{
-//     dboperations.editYetkili(request.params.id,request.params.unvan).then(result=>
-//         {
-//             console.log(result)
-//             response.status(201).json({message:"Kayıt güncellendi"});
-//     })
-// })
-
 //yetkiliedit
 router.route('/edit/:id').post((request, response) => {
     const id = parseInt(request.params.id);
@@ -345,5 +408,3 @@ router.route('/adayedit/:id').post((request, response) => {
 var port =process.env.PORT || 1000; //localhosta bağlanma portu 
 app.listen(port);
 console.log("SDS api çalisiyor " + port);
-
-
